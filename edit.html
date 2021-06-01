@@ -1,0 +1,13 @@
+<html>
+    <head>
+        <title>GoWiki</title>
+    </head>
+    <body>
+        <h1>Editing {{.Title}}</h1>
+        <form action="/save/{{.Title}}" type="POST">
+            <textarea name="body" rows="20" cols="80">{{printf "%s" .Body}}</textarea>  <!--printf instead of directly writing because body is a slice of byte. alternatively, type cast to string in the backend-->
+            <br>
+            <input type="submit" value="Save">
+        </form>
+    </body>
+</html>
