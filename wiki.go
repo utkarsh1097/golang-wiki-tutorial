@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -66,20 +65,31 @@ func getTitle(w http.ResponseWriter, r *http.Request) (string, error) {
 		http.NotFound(w, r)
 		return "", errors.New("invalid page title")
 	}
-	fmt.Println(m)
 	return m[2], nil
+}
+
+/*
+	In order to avoid redundant checks in every handler, we can write a 
+	wrapper function so that all checks are done in one place
+*/
+
+func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		title, err := getTitle(w, r)
+		if err != nil {
+			return
+		}
+		fn(w, r, title)
+	}
 }
 
 /*
 	Handler meant to be used when requests hit a specified path
 	w: response object. response is written to the client
 	r: request object. it is the request sent from client
+	title: title/name of the requested page. may/may not exist
 */
-func viewHandler(w http.ResponseWriter, r *http.Request) {
-	title, err := getTitle(w, r)
-	if err != nil {
-		return 
-	}
+func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
 	p, err := loadpage(title)
 	if err != nil {
 		http.Error(w, "could not find page.", http.StatusNotFound)
@@ -92,12 +102,11 @@ func viewHandler(w http.ResponseWriter, r *http.Request) {
 	Handler for displaying an "edit form" that takes in information
 	for creating a new wiki page, if a page does not exist. If it does,
 	display the pre-filled information in form?
+	w: response object. response is written to the client
+	r: request object. it is the request sent from client
+	title: title/name of the requested page. may/may not exist
 */
-func editHandler(w http.ResponseWriter, r *http.Request) {
-	title, err := getTitle(w, r)
-	if err != nil {
-		return 
-	}
+func editHandler(w http.ResponseWriter, r *http.Request, title string) {
 	p, err := loadpage(title)
 	if err != nil {
 		p = &Page{Title: title}
@@ -108,15 +117,14 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 /*
 	Handler for saving a submitted page. In case the page already exists,
 	the existing one is ovewritten.
+	w: response object. response is written to the client
+	r: request object. it is the request sent from client
+	title: title/name of the requested page. may/may not exist
 */
-func saveHandler(w http.ResponseWriter, r *http.Request) {
-	title, err := getTitle(w, r)
-	if err != nil {
-		return
-	}
+func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	body := r.FormValue("body")
 	p := &Page{Body: []byte(body), Title: title}
-	err = p.save()
+	err := p.save()
 	if err == nil {
 		http.Redirect(w, r, "/view/"+title, http.StatusFound)
 	} else {
@@ -126,9 +134,9 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	//handlers
-	http.HandleFunc("/view/", viewHandler) //viewHandler assigned to "/view/" path
-	http.HandleFunc("/edit/", editHandler)
-	http.HandleFunc("/save/", saveHandler)
+	http.HandleFunc("/view/", makeHandler(viewHandler)) //viewHandler assigned to "/view/" path
+	http.HandleFunc("/edit/", makeHandler(editHandler))
+	http.HandleFunc("/save/", makeHandler(saveHandler))
 
 	log.Panic(http.ListenAndServe("localhost:8080", nil)) //listen and raise panic if error thrown. error throws iff program exits\
 
